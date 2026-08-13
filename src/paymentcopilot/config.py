@@ -19,6 +19,8 @@ class Settings:
     pinecone_cloud: str
     pinecone_region: str
     embedding_model: str
+    database_url: str
+    uc3_confidence_threshold: float
 
 
 def _require(name: str) -> str:
@@ -44,6 +46,10 @@ def load_settings() -> Settings:
         embedding_model=os.environ.get(
             "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
         ),
+        database_url=os.environ.get(
+            "DATABASE_URL", "postgresql://localhost/paymentcopilot"
+        ),
+        uc3_confidence_threshold=float(os.environ.get("UC3_CONFIDENCE_THRESHOLD", "0.45")),
     )
 
 

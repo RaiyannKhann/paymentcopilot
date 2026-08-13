@@ -1,0 +1,41 @@
+txn_id,merchant_id,status,error_code,amount,currency,description,created_at
+txn_30032,globex-travel,success,,141894,INR,,2026-07-01T00:39:58
+txn_10942,demo-merchant,success,,60515,INR,Order payment,2026-07-02T12:35:55
+txn_23434,acme-retail,pending,,155294,INR,,2026-07-02T13:01:46
+txn_41385,globex-travel,success,,230664,INR,,2026-07-04T19:45:31
+txn_71348,globex-travel,failed,authentication_timeout,178832,INR,,2026-07-06T13:27:44
+txn_50857,acme-retail,failed,invalid_card_number,34019,USD,,2026-07-06T20:58:48
+txn_95909,acme-retail,failed,issuer_unavailable,9463,USD,,2026-07-07T18:40:52
+txn_16630,demo-merchant,pending,,24948,INR,,2026-07-09T01:45:59
+txn_99593,globex-travel,pending,,160180,INR,,2026-07-09T07:23:27
+txn_46434,acme-retail,failed,invalid_card_number,97540,INR,,2026-07-11T04:05:36
+txn_77391,acme-retail,success,,175868,INR,,2026-07-11T09:36:14
+txn_38785,demo-merchant,pending,,221448,INR,Invoice settlement,2026-07-12T02:51:37
+txn_18392,globex-travel,success,,154721,INR,,2026-07-12T04:06:11
+txn_93810,acme-retail,success,,194893,INR,,2026-07-12T21:19:10
+txn_80381,globex-travel,refunded,,201983,INR,,2026-07-17T12:19:59
+txn_83579,acme-retail,failed,authentication_timeout,38342,USD,,2026-07-18T13:45:23
+txn_15695,demo-merchant,pending,,35242,USD,,2026-07-19T09:01:28
+txn_73092,demo-merchant,success,,3942,USD,,2026-07-19T09:32:08
+txn_92240,demo-merchant,success,,39186,USD,,2026-07-19T16:17:11
+txn_22363,acme-retail,success,,23319,USD,,2026-07-20T22:58:07
+txn_96474,globex-travel,failed,card_declined,138826,INR,Subscription renewal,2026-07-21T12:59:29
+txn_34050,demo-merchant,success,,16471,USD,Order payment,2026-07-22T12:17:05
+txn_24322,globex-travel,success,,50362,INR,,2026-07-22T18:40:21
+txn_76542,globex-travel,success,,221138,INR,,2026-07-25T15:28:12
+txn_30289,demo-merchant,success,,57568,INR,Order payment,2026-07-29T02:47:38
+txn_22156,acme-retail,failed,card_expired,222665,INR,,2026-07-30T07:23:30
+txn_42087,acme-retail,success,,24967,USD,,2026-08-01T01:39:13
+txn_61173,acme-retail,success,,18794,USD,Customer checkout,2026-08-03T19:35:16
+txn_48427,demo-merchant,refunded,,151849,INR,,2026-08-04T04:53:08
+txn_38657,demo-merchant,success,,147627,INR,,2026-08-04T18:13:23
+txn_17100,acme-retail,pending,,16389,INR,,2026-08-05T08:25:49
+txn_65392,demo-merchant,success,,41258,INR,,2026-08-07T01:32:06
+txn_73699,globex-travel,refunded,,199887,INR,,2026-08-07T04:15:42
+txn_84847,acme-retail,failed,risk_blocked,206183,INR,,2026-08-09T04:48:07
+txn_81426,acme-retail,failed,authentication_failed,38718,USD,Subscription renewal,2026-08-09T07:03:17
+txn_28131,demo-merchant,failed,risk_blocked,198623,INR,,2026-08-11T19:15:27
+txn_96673,demo-merchant,success,,21416,INR,,2026-08-12T01:31:35
+txn_66985,globex-travel,success,,312,USD,Subscription renewal,2026-08-12T12:26:33
+txn_62581,globex-travel,success,,55807,INR,Subscription renewal,2026-08-12T13:02:32
+txn_74042,acme-retail,success,,244057,INR,Invoice settlement,2026-08-12T15:47:06

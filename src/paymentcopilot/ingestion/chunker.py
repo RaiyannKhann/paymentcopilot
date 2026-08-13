@@ -47,12 +47,12 @@ def _sub_split(text: str, max_words: int, overlap_words: int) -> list[str]:
     return parts
 
 
-def _make_id(source_doc: str, chunk_index: int) -> str:
-    digest = hashlib.sha1(f"{source_doc}::{chunk_index}".encode()).hexdigest()
+def _make_id(doc_type: str, source_doc: str, chunk_index: int) -> str:
+    digest = hashlib.sha1(f"{doc_type}::{source_doc}::{chunk_index}".encode()).hexdigest()
     return digest[:16]
 
 
-def chunk_document(doc: Document) -> list[Chunk]:
+def chunk_document(doc: Document, doc_type: str = "docs", tenant_id: str = "shared") -> list[Chunk]:
     chunks = []
     chunk_index = 0
     for heading, body in _split_into_sections(doc.text):
@@ -61,19 +61,21 @@ def chunk_document(doc: Document) -> list[Chunk]:
         for part in _sub_split(body, MAX_SECTION_WORDS, OVERLAP_WORDS):
             chunks.append(
                 Chunk(
-                    id=_make_id(doc.source_doc, chunk_index),
+                    id=_make_id(doc_type, doc.source_doc, chunk_index),
                     text=part,
                     source_doc=doc.source_doc,
                     section=heading,
                     chunk_index=chunk_index,
+                    doc_type=doc_type,
+                    tenant_id=tenant_id,
                 )
             )
             chunk_index += 1
     return chunks
 
 
-def chunk_documents(docs: list[Document]) -> list[Chunk]:
+def chunk_documents(docs: list[Document], doc_type: str = "docs", tenant_id: str = "shared") -> list[Chunk]:
     all_chunks = []
     for doc in docs:
-        all_chunks.extend(chunk_document(doc))
+        all_chunks.extend(chunk_document(doc, doc_type=doc_type, tenant_id=tenant_id))
     return all_chunks

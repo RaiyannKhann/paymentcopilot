@@ -6,39 +6,57 @@ app = typer.Typer(add_completion=False)
 
 
 @app.command()
-def ingest():
-    """Chunk, embed, and upsert the docs corpus into Pinecone."""
-    from paymentcopilot.ingestion.ingest import ingest as run_ingest
+def ingest(
+    reset: bool = typer.Option(
+        False, "--reset", help="Delete and recreate the Pinecone index before ingesting."
+    ),
+):
+    """Chunk, embed, and upsert the docs (UC1) and policy (UC3) corpora into Pinecone."""
+    from paymentcopilot.ingestion.ingest import ingest_all
 
-    typer.echo("Loading, chunking, and embedding docs corpus...")
-    num_docs, num_chunks = run_ingest()
-    typer.echo(f"Ingested {num_docs} docs -> {num_chunks} chunks -> {num_chunks} vectors upserted.")
+    typer.echo("Loading, chunking, and embedding docs + policy corpora...")
+    result = ingest_all(reset=reset)
+    for doc_type, (num_docs, num_chunks) in result.items():
+        typer.echo(f"[{doc_type}] {num_docs} docs -> {num_chunks} chunks -> {num_chunks} vectors upserted.")
 
 
 @app.command()
 def ask(
     query: str,
-    top_k: int = typer.Option(5, help="Number of chunks to retrieve."),
-    show_chunks: bool = typer.Option(False, "--show-chunks", help="Print raw retrieved chunks and scores."),
+    merchant_id: str = typer.Option(
+        "demo-merchant", "--merchant-id", help="Merchant tenant scope for transaction lookups (UC2)."
+    ),
+    show_route: bool = typer.Option(
+        False, "--show-route", help="Print the classified route and reasoning."
+    ),
+    show_chunks: bool = typer.Option(
+        False, "--show-chunks", help="Print raw retrieved chunks and scores."
+    ),
 ):
-    """Ask a question and get a grounded, cited answer."""
-    from paymentcopilot.generation.generator import generate_answer
-    from paymentcopilot.retrieval.retriever import retrieve
+    """Ask a question — routed to UC1 docs, UC2 transaction lookup, UC3 policy, or refused."""
+    from paymentcopilot.graph.router import run_query
 
-    chunks = retrieve(query, top_k=top_k)
+    result = run_query(query, merchant_id=merchant_id)
 
-    if show_chunks:
+    if show_route:
+        typer.echo(f"--- Route: {result.route} ({result.route_reason}) ---")
+
+    if show_chunks and result.retrieved_chunks:
         typer.echo("--- Retrieved chunks ---")
-        for rc in chunks:
+        for rc in result.retrieved_chunks:
             typer.echo(f"[{rc.score:.4f}] {rc.chunk.source_doc} — {rc.chunk.section}")
         typer.echo("")
 
-    answer = generate_answer(query, chunks)
+    if result.transaction is not None:
+        t = result.transaction
+        typer.echo(
+            f"--- Transaction {t.txn_id} ({t.status}, {t.amount} {t.currency}, {t.created_at}) ---"
+        )
 
     typer.echo("--- Answer ---")
-    typer.echo(answer.text)
-    if not answer.grounded:
-        typer.echo("\n(escalation: response was not grounded in retrieved context)")
+    typer.echo(result.answer)
+    if result.escalated:
+        typer.echo("\n(escalated: not answered directly from grounded context)")
 
 
 if __name__ == "__main__":
