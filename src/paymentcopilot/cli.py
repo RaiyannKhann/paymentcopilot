@@ -40,6 +40,8 @@ def ask(
 
     if show_route:
         typer.echo(f"--- Route: {result.route} ({result.route_reason}) ---")
+        if result.guardrail_status != "passed":
+            typer.echo(f"--- Guardrail: {result.guardrail_status} ---")
 
     if show_chunks and result.retrieved_chunks:
         typer.echo("--- Retrieved chunks ---")

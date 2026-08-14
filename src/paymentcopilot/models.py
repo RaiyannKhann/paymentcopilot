@@ -48,3 +48,4 @@ class RouterResult:
     escalated: bool
     retrieved_chunks: list[RetrievedChunk] = field(default_factory=list)
     transaction: Transaction | None = None
+    guardrail_status: str = "passed"

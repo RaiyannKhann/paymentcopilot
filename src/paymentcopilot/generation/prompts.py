@@ -63,12 +63,10 @@ error, or what to do next).
 - Be concise, factual, and avoid speculation about the transaction beyond the given fields."""
 
 
-def build_transaction_user_prompt(
-    query: str,
-    transaction,
-    error_explanation: str | None,
-    doc_chunks: list[RetrievedChunk],
-) -> str:
+def build_transaction_record_text(transaction) -> str:
+    """The transaction-record portion of the UC2 prompt, factored out so the output-guardrail
+    faithfulness check (graph/router.py) can build grounding text that matches exactly what the
+    model was shown — a mismatch here causes spurious faithfulness failures on correct answers."""
     txn = transaction
     record_lines = [
         f"txn_id: {txn.txn_id}",
@@ -80,8 +78,16 @@ def build_transaction_user_prompt(
     ]
     if txn.description:
         record_lines.append(f"description: {txn.description}")
-    record = "\n".join(record_lines)
+    return "\n".join(record_lines)
 
+
+def build_transaction_user_prompt(
+    query: str,
+    transaction,
+    error_explanation: str | None,
+    doc_chunks: list[RetrievedChunk],
+) -> str:
+    record = build_transaction_record_text(transaction)
     sections = [f"Transaction record:\n{record}"]
 
     if error_explanation:

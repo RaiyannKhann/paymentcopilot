@@ -66,3 +66,71 @@ map to plain-language explanations via `structured/error_codes.py` (kept in sync
 specific error code.
 
 No guardrails, caching, evals, or API layer yet — see `prd.md` §11 for the full phased plan.
+
+## Phase 3 — Guardrails
+
+```
+                                                       ┌─ blocked ─────────────► fixed refusal
+                                                       │   (injection detected)
+classify -> input_guardrail(query) ─[conditional]─────┼─ uc1_docs ─────┐
+  (scan_injection, then scan_and_redact if clean)      │                 │
+                                                       ├─ uc2_transaction ┼─► output_guardrail -> END
+                                                       │                 │    (faithfulness check,
+                                                       ├─ uc3_policy ────┘     then PII-leak redact —
+                                                       │                       skipped if node already
+                                                       └─ out_of_scope ──────► END   escalated=True)
+```
+
+**Input guardrails (FR10/FR11/FR12), `input_guardrail` node (`graph/router.py`):** runs
+immediately after `classify`, regardless of the classified route. `guardrails/injection.py`
+scans the raw query with hand-rolled regex across five categories (instruction override,
+role-play/jailbreak, system-prompt exfiltration, payments-domain cross-tenant exfiltration,
+delimiter/escape attempts) — resolves `prd.md` §14's "NeMo Guardrails vs. hand-rolled" open
+question in favor of hand-rolled, per §6.1. A match overrides `route` to `"blocked"`, short-
+circuiting to a fixed `INJECTION_BLOCKED_MESSAGE` with no retrieval/generation call (satisfies
+FR12's "short-circuit before retrieval/generation" for this case too, not just out-of-scope
+topics). Otherwise `guardrails/pii.py` (Presidio, `AnalyzerEngine`/`AnonymizerEngine`) scans for
+`CREDIT_CARD`/`EMAIL_ADDRESS`/`PHONE_NUMBER`/`IBAN_CODE`/`US_SSN`/`US_BANK_NUMBER` and redacts
+in place — the redacted query is what every downstream node (retrieval, generation, logging)
+actually sees.
+
+**UC2 structured-field injection (FR10's explicit case), `_uc2_node`:** the transaction
+`description` field can't be scanned in `input_guardrail` since it isn't known until
+`lookup_transaction()` runs. `_uc2_node` scans it inline, before `build_transaction_user_prompt`
+is ever called. An injection match skips the Claude call entirely — `_format_transaction_fallback`
+answers from verified DB columns only (status, amount, error code + explanation), so the tainted
+text truly never reaches the model. A PII match in the description redacts a `dataclasses.replace`
+copy that feeds the prompt, while the original transaction (unredacted) is still what's returned
+on `RouterResult.transaction` for CLI display — that's the merchant viewing their own record, not
+data reaching the LLM/logs, which is FR11's actual concern.
+
+**Output guardrails (FR13/FR14/FR15), `output_guardrail` node:** runs after any node that
+actually called Claude (uc1/uc2/uc3), skipped whenever the node already set `escalated=True`
+(nothing real generated to check). First, `guardrails/faithfulness.py` runs a lightweight
+LLM-as-judge check (`check_faithfulness`, one extra Claude call, PASS/FAIL verdict) — the
+Phase-3-appropriate alternative to full RAGAS per §6.2 ("RAGAS metric **or** LLM-as-judge at
+inference time"); full RAGAS + golden dataset is Phase 4. Grounding text is assembled per route:
+UC1/UC3 use the joined retrieved-chunk text; UC2 reuses `build_transaction_record_text()`
+(factored out of `generation/prompts.py` specifically so the judge sees the *exact* transaction
+context the model saw — a mismatch here caused a real false-positive catch during Phase 3
+adversarial testing, logged in `docs/04-guardrail-attack-log.md`). A FAIL overrides the answer
+with `FAITHFULNESS_FAILURE_MESSAGE` and sets `escalated=True`. Otherwise `guardrails/pii.py`
+scans the answer text and redacts in place if PII leaked — this does *not* set `escalated=True`
+(the answer is still real, just scrubbed), communicated only via `guardrail_status`.
+
+**Confidence gating (FR15), `guardrails/confidence.py`:** `passes_confidence(chunks, threshold)`
+extracts the `not chunks or chunks[0].score < threshold` check UC3 already had (Phase 2), now
+shared with a **new** pre-call gate on UC1 (`generate_answer`, previously ungated), each with its
+own independently-tunable threshold (`UC3_CONFIDENCE_THRESHOLD`, `UC1_CONFIDENCE_THRESHOLD` — both
+provisional per `prd.md` §14, to be tuned against the Phase 4 golden set). **UC2 is exempt**: its
+grounding is an exact-key Postgres lookup, not a similarity search, so a retrieval-score threshold
+doesn't describe confidence in the transaction facts. Confidence gating (pre-call, cost-saving)
+and the faithfulness check (post-call) are sequential and non-overlapping — no duplicated logic.
+
+**`guardrail_status` (new `RouterResult`/`RouterState` field):** free-text, comma-composable
+(e.g. `"input_redacted:pii"`, `"output_blocked:faithfulness"`), matching the field name
+`prd.md` §10 already specifies in its indicative `/query` response shape. `escalated` keeps its
+existing meaning (real/faithful answer vs. fallback); a PII-redacted-but-faithful answer keeps
+`escalated=False` — `guardrail_status` alone signals the redaction.
+
+No eval harness (RAGAS/golden dataset), Redis, Docker, or API layer yet — see `prd.md` §11.

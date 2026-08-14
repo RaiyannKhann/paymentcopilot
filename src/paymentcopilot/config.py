@@ -21,6 +21,7 @@ class Settings:
     embedding_model: str
     database_url: str
     uc3_confidence_threshold: float
+    uc1_confidence_threshold: float
 
 
 def _require(name: str) -> str:
@@ -50,6 +51,7 @@ def load_settings() -> Settings:
             "DATABASE_URL", "postgresql://localhost/paymentcopilot"
         ),
         uc3_confidence_threshold=float(os.environ.get("UC3_CONFIDENCE_THRESHOLD", "0.45")),
+        uc1_confidence_threshold=float(os.environ.get("UC1_CONFIDENCE_THRESHOLD", "0.40")),
     )
 
 
