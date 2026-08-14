@@ -2,7 +2,7 @@
 
 Payments Support Copilot — a multi-tenant, production-styled RAG gateway that answers merchant support queries for a payment API platform (Razorpay/Stripe-style). See [prd.md](prd.md) for the full product requirements and phased build plan.
 
-This repo is being built in phases (see `prd.md` §11). **Phases 1-4 complete:** bare RAG pipeline (UC1 docs, UC2 structured transaction lookup, UC3 policy-grounded refusal), dispatched by a deterministic LangGraph router; input/output guardrails (prompt-injection detection, PII redaction, LLM-as-judge faithfulness, confidence-gated escalation); and an offline evaluation harness (golden dataset, RAGAS metrics, custom refusal-correctness scoring). No Redis, Docker, CI, or deployment yet — see `docs/01-architecture.md` for details on each phase.
+This repo is being built in phases (see `prd.md` §11). **Phases 1-5 complete:** bare RAG pipeline (UC1 docs, UC2 structured transaction lookup, UC3 policy-grounded refusal), dispatched by a deterministic LangGraph router; input/output guardrails (prompt-injection detection, PII redaction, LLM-as-judge faithfulness, confidence-gated escalation); an offline evaluation harness (golden dataset, RAGAS metrics, custom refusal-correctness scoring); and a FastAPI gateway with Redis-backed semantic caching, per-tenant rate limiting, session memory, and a Docker Compose local stack. No CI/CD or cloud deployment yet — see `docs/01-architecture.md` for details on each phase.
 
 All documentation, transaction, and policy data in this repo is original and/or synthetic, generated for portfolio/demo purposes. No real merchant, transaction, or PII data is used anywhere.
 
@@ -68,3 +68,20 @@ Manually sweep `UC1_CONFIDENCE_THRESHOLD`/`UC3_CONFIDENCE_THRESHOLD` candidates 
 ```
 python -m paymentcopilot.cli evals sweep-thresholds
 ```
+
+## API (Phase 5)
+
+Requires a running Redis instance (`REDIS_URL`, default `redis://localhost:6379/0`) in addition to Postgres and Pinecone. Run locally:
+```
+uvicorn paymentcopilot.api.app:app --reload
+```
+- `POST /query` — `{tenant_id, query, session_id?}` → `{answer, source_route, grounding_refs, guardrail_status, escalated, session_id}`. Rate-limited per tenant (`RATE_LIMIT_MAX_REQUESTS` per `RATE_LIMIT_WINDOW_SECONDS`, 429 on exceed) and semantic-cache-accelerated (near-duplicate queries short-circuit `run_query()`).
+- `GET /health` — checks Redis and Postgres reachability.
+- `POST /evals/run` — internal/dev only, disabled (`404`) unless `ENABLE_EVALS_ENDPOINT=true`.
+
+Or via Docker Compose (containerizes Redis, Postgres, and a one-shot seed step alongside the API):
+```
+cp .env.example .env   # fill in ANTHROPIC_API_KEY and PINECONE_API_KEY
+docker-compose up --build
+```
+The API is then reachable at `http://localhost:8000`. See `docs/01-architecture.md`'s Phase 5 section for the full request-path design.

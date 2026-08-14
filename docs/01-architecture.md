@@ -182,4 +182,94 @@ part of the default `evals run` path, since a proper sweep must re-invoke `run_q
 candidate threshold (see `evals/threshold_sweep.py`'s module docstring for why a post-hoc
 simulation from one run's recorded scores doesn't work in both directions).
 
-No Redis, Docker, CI wiring, or API layer yet — see `prd.md` §11 for the full phased plan.
+## Phase 5 — Redis (cache/rate-limit/session), Docker Compose, FastAPI hardening
+
+```
+Client
+  -> POST /query {tenant_id, query, session_id?}          (api/app.py)
+       -> rate_limit_dependency (INCR ratelimit:{tenant_id}, 429 if over limit)
+       -> semantic cache lookup (embed query, cosine-scan semcache:{tenant_id})
+            hit  -> return cached QueryResponse
+            miss -> asyncio.to_thread(run_query_with_usage, query, merchant_id=tenant_id)
+                      (unchanged Phase 1-4 graph.router.run_query, wrapped for
+                       token-usage capture — see generation/usage_tracking.py)
+                    -> append_turn(session:{tenant_id}:{session_id})  [write-only, TTL-refreshed]
+                    -> store_answer(semcache:{tenant_id})             [skipped if escalated]
+       -> RequestLoggingMiddleware: one structured JSON log line per request
+            (path, status_code, latency_ms, tenant_id, route, guardrail_status,
+             escalated, cache_hit, token_usage)
+
+GET /health  -> Redis PING + Postgres SELECT 1 (Pinecone not actively pinged)
+POST /evals/run -> 404 unless ENABLE_EVALS_ENDPOINT=true; reuses evals/{golden_set,runner,report}
+
+docker-compose.yml: redis + postgres + seed (one-shot, service_completed_successfully)
+                     + api (Dockerfile, model weights baked in at build time)
+```
+
+**Graph internals untouched.** `graph/router.py`'s nodes, guardrails, and routing are
+unchanged this phase — Phase 5 wraps `run_query()` behind an HTTP boundary rather than
+modifying it. The one exception: `run_query()` returned `RouterResult.query` as the raw
+input `query` parameter instead of the graph's possibly-PII-redacted internal state —
+harmless while nothing persisted it, but session memory (below) is the first feature
+that does, so this was fixed to read `result.get("query", query)` instead.
+
+**Semantic cache (FR20), `cache/semantic_cache.py`:** embed-and-linear-scan rather than
+a Redis vector module — at this project's scale (dozens of cached entries per tenant,
+capped via `SEMANTIC_CACHE_MAX_ENTRIES_PER_TENANT`) a Python cosine-similarity scan
+over a bounded list is simpler and avoids a new infra dependency. Cosine similarity
+reduces to a dot product because `embedder.embed()` already L2-normalizes vectors.
+Stores the API *response payload* (not `RouterResult`/`Chunk`/`Transaction`), keeping
+the cache decoupled from graph internals. Escalated/refused answers are never cached —
+a refusal shouldn't be served as a stable "answer" once retrieval data changes. TTL is
+lazy per-entry (checked on lookup) plus a backstop whole-key `EXPIRE` at 2x the TTL, so
+a heavily-hit tenant's key doesn't prevent individual stale entries from expiring.
+Tenant isolation is structural: one Redis list per `tenant_id`, no cross-tenant scan
+possible.
+
+**Rate limiting (FR21), `cache/rate_limiter.py`:** fixed-window `INCR`+`EXPIRE` counter
+per tenant — simplest correct approach at this scale; a burst at a window boundary can
+admit up to ~2x the limit, an accepted tradeoff over sliding-window/token-bucket
+complexity. Enforced as a FastAPI dependency that runs *before* the semantic cache
+lookup and before `run_query()`, since even a cache lookup costs a local embed + Redis
+round trip that a misbehaving tenant shouldn't be able to hide behind.
+
+**Session memory (FR22), `cache/session_memory.py`:** every turn (redacted query,
+already-guardrail-checked answer, route, escalated, guardrail_status, timestamp) is
+`RPUSH`ed to `session:{tenant_id}:{session_id}` with a sliding TTL refreshed on each
+write. Storage/plumbing only this phase — history is never fed back into generation,
+matching the PRD's explicit non-goal of building a general-purpose chatbot. If the
+client omits `session_id`, the API generates one and returns it in the response so a
+future phase that does consume history has a client-visible handle to build on.
+
+**FastAPI layer (FR23/FR24), `api/app.py`:** `tenant_id` (the API's public vocabulary,
+matching `prd.md` §10) is translated to `merchant_id` (the router's internal
+vocabulary) only at this boundary — nothing inside `graph/router.py`, `structured/`, or
+the CLI changed. `run_query()` and everything beneath it (Pinecone, Anthropic, psycopg)
+stays fully synchronous; the endpoint wraps it in `asyncio.to_thread` rather than
+rewriting Phase 1-4 internals to be async, which would be scope creep beyond what the
+PRD requires. **No token-level streaming**: Phase 3's output guardrails (faithfulness +
+PII-leak check) must see the *complete* generated answer before it's safe to return —
+true streaming would either leak unvetted tokens or fake-stream an already-finished
+answer with no real benefit, so `/query` stays a plain synchronous JSON response.
+Token usage is captured via a `ContextVar`-based accumulator
+(`generation/usage_tracking.py`) added to `generator.py::call_claude()` — additive and
+a no-op unless a caller opts in, so no existing call site or test changed.
+
+**`GET /health`:** single endpoint (not split liveness/readiness — `prd.md` §10 asks
+for one row), checks Redis (`PING`) and Postgres (`SELECT 1`); Pinecone isn't actively
+pinged since there's no equally-cheap check and failures already surface as 5xx on real
+`/query` calls.
+
+**`POST /evals/run`:** gated by `ENABLE_EVALS_ENDPOINT` (default `false`), returning
+`404` rather than `403` when disabled so the endpoint's existence isn't confirmed to a
+prober — no new auth system was introduced for this internal/dev-only endpoint.
+
+**Docker (`Dockerfile`, `docker-compose.yml`):** single-stage image (most dependencies
+here ship prebuilt wheels, so multi-stage's main benefit is marginal); MiniLM and
+spaCy model weights are baked in at build time so the container needs no network access
+at runtime. `docker-compose.yml` containerizes Postgres too (not just Redis + api), via
+a one-shot `seed` service (`service_completed_successfully` gate) that loads the
+existing `data/transactions/transactions.csv` before `api` starts — a fresh clone gets
+a fully self-contained local stack.
+
+No CI/CD or cloud deployment yet — see `prd.md` §11 for Phase 6.

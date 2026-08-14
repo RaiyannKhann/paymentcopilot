@@ -22,6 +22,14 @@ class Settings:
     database_url: str
     uc3_confidence_threshold: float
     uc1_confidence_threshold: float
+    redis_url: str
+    semantic_cache_similarity_threshold: float
+    semantic_cache_ttl_seconds: int
+    semantic_cache_max_entries_per_tenant: int
+    rate_limit_window_seconds: int
+    rate_limit_max_requests: int
+    session_ttl_seconds: int
+    enable_evals_endpoint: bool
 
 
 def _require(name: str) -> str:
@@ -52,6 +60,18 @@ def load_settings() -> Settings:
         ),
         uc3_confidence_threshold=float(os.environ.get("UC3_CONFIDENCE_THRESHOLD", "0.45")),
         uc1_confidence_threshold=float(os.environ.get("UC1_CONFIDENCE_THRESHOLD", "0.40")),
+        redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        semantic_cache_similarity_threshold=float(
+            os.environ.get("SEMANTIC_CACHE_SIMILARITY_THRESHOLD", "0.94")
+        ),
+        semantic_cache_ttl_seconds=int(os.environ.get("SEMANTIC_CACHE_TTL_SECONDS", "3600")),
+        semantic_cache_max_entries_per_tenant=int(
+            os.environ.get("SEMANTIC_CACHE_MAX_ENTRIES_PER_TENANT", "50")
+        ),
+        rate_limit_window_seconds=int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60")),
+        rate_limit_max_requests=int(os.environ.get("RATE_LIMIT_MAX_REQUESTS", "20")),
+        session_ttl_seconds=int(os.environ.get("SESSION_TTL_SECONDS", "1800")),
+        enable_evals_endpoint=os.environ.get("ENABLE_EVALS_ENDPOINT", "false").lower() == "true",
     )
 
 

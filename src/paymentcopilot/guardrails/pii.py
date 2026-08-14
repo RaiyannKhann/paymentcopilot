@@ -28,8 +28,20 @@ class PIIResult:
 @lru_cache(maxsize=1)
 def _analyzer():
     from presidio_analyzer import AnalyzerEngine
+    from presidio_analyzer.nlp_engine import NlpEngineProvider
 
-    return AnalyzerEngine()
+    # Presidio's AnalyzerEngine() defaults to en_core_web_lg (400MB, downloaded on first
+    # use) unless explicitly configured. Pinned to en_core_web_sm to match the small,
+    # pattern-based-recognizer-only entity list this project actually uses (see module
+    # docstring) and to keep runtime behavior network-independent once the model is
+    # installed (README/Dockerfile both provision en_core_web_sm, not _lg).
+    nlp_engine = NlpEngineProvider(
+        nlp_configuration={
+            "nlp_engine_name": "spacy",
+            "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
+        }
+    ).create_engine()
+    return AnalyzerEngine(nlp_engine=nlp_engine)
 
 
 @lru_cache(maxsize=1)

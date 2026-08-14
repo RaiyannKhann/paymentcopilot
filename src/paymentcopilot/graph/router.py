@@ -280,7 +280,7 @@ _graph = _build_graph()
 def run_query(query: str, merchant_id: str = "demo-merchant") -> RouterResult:
     result = _graph.invoke({"query": query, "merchant_id": merchant_id})
     return RouterResult(
-        query=query,
+        query=result.get("query", query),
         route=result["route"],
         route_reason=result["route_reason"],
         answer=result["answer"],

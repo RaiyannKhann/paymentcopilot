@@ -11,6 +11,7 @@ from paymentcopilot.generation.prompts import (
     build_transaction_user_prompt,
     build_user_prompt,
 )
+from paymentcopilot.generation.usage_tracking import record_usage
 from paymentcopilot.guardrails.confidence import passes_confidence
 from paymentcopilot.guardrails.messages import LOW_CONFIDENCE_MESSAGE
 from paymentcopilot.models import Answer, RetrievedChunk, Transaction
@@ -33,6 +34,7 @@ def call_claude(system_prompt: str, user_prompt: str) -> str:
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
+    record_usage(response.usage.input_tokens, response.usage.output_tokens)
     return response.content[0].text
 
 

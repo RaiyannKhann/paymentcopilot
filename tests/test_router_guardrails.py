@@ -80,6 +80,7 @@ def test_pii_in_query_is_redacted_before_reaching_generation():
     assert "input_redacted:pii" in result.guardrail_status
     user_prompt = mock_call_claude.call_args_list[0].args[1]
     assert "merchant-support@example.com" not in user_prompt
+    assert "merchant-support@example.com" not in result.query
 
 
 def test_uc2_description_injection_falls_back_without_calling_llm():
