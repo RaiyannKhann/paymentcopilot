@@ -1,0 +1,1 @@
+{"id": "bad_cat_001", "category": "not_a_real_category", "query": "q1", "merchant_id": "demo-merchant", "expected_route": "uc1_docs", "expected_escalated": false}

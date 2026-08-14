@@ -133,4 +133,53 @@ and the faithfulness check (post-call) are sequential and non-overlapping — no
 existing meaning (real/faithful answer vs. fallback); a PII-redacted-but-faithful answer keeps
 `escalated=False` — `guardrail_status` alone signals the redaction.
 
-No eval harness (RAGAS/golden dataset), Redis, Docker, or API layer yet — see `prd.md` §11.
+## Phase 4 — Evaluation Harness
+
+```
+data/eval/golden_set.jsonl (43 hand-authored items, 9 categories)
+  -> evals.golden_set.load_golden_set  (fail-loud schema validation)
+  -> evals.runner.run_golden_set        (loops run_query() once per item, isolates per-item errors)
+  -> evals.refusal_metric               (precision/recall/f1/accuracy on escalated vs. expected)
+  -> evals.routing_metric               (route accuracy + expected->actual confusion matrix)
+  -> evals.ragas_eval (unless --skip-ragas) (Faithfulness, ResponseRelevancy,
+        LLMContextPrecisionWithReference, LLMContextRecall — over the ragas_eligible/
+        happy-path subset only)
+  -> evals.report.build_report / write_report -> docs/03-eval-results/eval-<timestamp>.{md,json}
+```
+
+Entry points: `paymentcopilot evals run [--golden-path] [--output-dir] [--skip-ragas]` and the
+separate, occasional-run `paymentcopilot evals sweep-thresholds` (below). Not wired into CI —
+that's Phase 5+ per `prd.md` §11/FR18.
+
+**RAGAS's `Faithfulness` metric vs. `guardrails/faithfulness.py`'s live judge (Phase 3) — two
+independent, deliberately unmerged code paths.** The guardrail is a binary PASS/FAIL LLM-as-judge
+gating every live non-escalated answer, one extra Claude call per query, always on. RAGAS's
+`Faithfulness` is a continuous 0-1 score computed only during an offline eval run, meant to show
+a trend over iterations (`prd.md` §12), using its own judge/embedding wiring
+(`langchain_anthropic.ChatAnthropic` + `langchain_huggingface.HuggingFaceEmbeddings`, wrapped via
+`ragas.llms.LangchainLLMWrapper`/`ragas.embeddings.LangchainEmbeddingsWrapper`) and a
+`retrieved_contexts` shape assembled per-route in `evals/ragas_eval.py` (UC1/UC3: joined chunk
+text; UC2: `build_transaction_record_text()` — the same helper Phase 3 introduced to keep the
+guardrail's grounding text in sync with what the model actually saw).
+
+**Custom refusal-correctness metric (FR17, §7.2):** treats `RouterResult.escalated` as a binary
+classifier's prediction against each golden item's `expected_escalated`, scored as
+precision/recall/F1/accuracy over the *whole* golden set (not just the refusal categories) — this
+is what makes "correctly refuse... and only those" measurable; recall alone would reward a
+degenerate "refuse everything" strategy. A refusal-expected item escalated for a *different*
+reason than the golden item's `expected_guardrail_category` still counts as correct in this
+primary metric; reason-specificity is a separate `StrictRefusalDiagnostics` diagnostic, never
+blended into precision/recall (§14 of `docs/02-decisions-log.md`'s Phase 4 entry has the
+justification).
+
+**Routing accuracy** is scored as a first-class metric alongside refusal-correctness (not just a
+diagnostic) — FR1/FR2 care about routing correctness and the data (`expected_route` vs. actual
+`route`) is already available at no extra cost.
+
+**`evals sweep-thresholds`** is a separate, manual, occasional-run tool for `prd.md` §14's open
+question (empirically tuning `UC1_CONFIDENCE_THRESHOLD`/`UC3_CONFIDENCE_THRESHOLD`) — it is *not*
+part of the default `evals run` path, since a proper sweep must re-invoke `run_query` per
+candidate threshold (see `evals/threshold_sweep.py`'s module docstring for why a post-hoc
+simulation from one run's recorded scores doesn't work in both directions).
+
+No Redis, Docker, CI wiring, or API layer yet — see `prd.md` §11 for the full phased plan.

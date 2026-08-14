@@ -2,7 +2,7 @@
 
 Payments Support Copilot — a multi-tenant, production-styled RAG gateway that answers merchant support queries for a payment API platform (Razorpay/Stripe-style). See [prd.md](prd.md) for the full product requirements and phased build plan.
 
-This repo is being built in phases (see `prd.md` §11). **Phase 2** (current): UC1 docs Q&A, UC2 structured transaction lookup, and UC3 policy-grounded refusal logic, dispatched by a deterministic LangGraph router. No guardrails, evals, caching, or deployment yet.
+This repo is being built in phases (see `prd.md` §11). **Phases 1-4 complete:** bare RAG pipeline (UC1 docs, UC2 structured transaction lookup, UC3 policy-grounded refusal), dispatched by a deterministic LangGraph router; input/output guardrails (prompt-injection detection, PII redaction, LLM-as-judge faithfulness, confidence-gated escalation); and an offline evaluation harness (golden dataset, RAGAS metrics, custom refusal-correctness scoring). No Redis, Docker, CI, or deployment yet — see `docs/01-architecture.md` for details on each phase.
 
 All documentation, transaction, and policy data in this repo is original and/or synthetic, generated for portfolio/demo purposes. No real merchant, transaction, or PII data is used anywhere.
 
@@ -16,15 +16,21 @@ All documentation, transaction, and policy data in this repo is original and/or 
 2. Install the project (editable install, pulls in `requirements.txt`):
    ```
    pip install -e .
+   python -m spacy download en_core_web_sm
    ```
-3. Copy `.env.example` to `.env` and fill in your API keys:
+   The spaCy model is required by Presidio (PII detection/redaction guardrails).
+3. (Optional) Install eval-only dependencies (RAGAS + golden-set scoring — not needed at live-request runtime, only for `paymentcopilot evals ...`):
+   ```
+   pip install -r requirements-eval.txt
+   ```
+4. Copy `.env.example` to `.env` and fill in your API keys:
    ```
    cp .env.example .env
    ```
    - **Anthropic**: sign up at platform.claude.com, add billing, create an API key under Settings → API Keys.
    - **Pinecone**: sign up at app.pinecone.io (free Starter tier), create a project and API key. The index is created automatically on first ingestion run.
    - **Postgres**: needs a local Postgres server reachable at `DATABASE_URL` (default `postgresql://localhost/paymentcopilot`). Install via Homebrew if you don't have one: `brew install postgresql@16 && brew services start postgresql@16`, then `createdb paymentcopilot`.
-4. Verify setup:
+5. Verify setup:
    ```
    python scripts/verify_setup.py
    ```
@@ -51,3 +57,14 @@ python -m paymentcopilot.cli ask "Can I refund this transaction after 90 days?"
 ```
 
 Flags: `--show-route` prints the classified route and reasoning; `--show-chunks` prints raw retrieved chunks and similarity scores; `--merchant-id` scopes transaction lookups (UC2) to a tenant (default `demo-merchant`).
+
+Run the golden-set eval suite (requires `requirements-eval.txt`; writes a Markdown + JSON report pair to `docs/03-eval-results/`):
+```
+python -m paymentcopilot.cli evals run
+python -m paymentcopilot.cli evals run --skip-ragas   # fast iteration: refusal-correctness + routing accuracy only, no RAGAS LLM-judge calls
+```
+
+Manually sweep `UC1_CONFIDENCE_THRESHOLD`/`UC3_CONFIDENCE_THRESHOLD` candidates against the golden set (occasional-run tool, not part of CI):
+```
+python -m paymentcopilot.cli evals sweep-thresholds
+```

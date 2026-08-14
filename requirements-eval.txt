@@ -1,0 +1,5 @@
+# Eval-only dependencies (RAGAS + golden-set scoring), not needed at live-request runtime.
+ragas>=0.2,<0.3
+datasets>=2.19,<3.0
+langchain-anthropic>=0.3,<0.4
+langchain-huggingface>=0.1,<0.2

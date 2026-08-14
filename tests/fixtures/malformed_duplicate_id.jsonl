@@ -1,0 +1,2 @@
+{"id": "dup_001", "category": "uc1_happy", "query": "q1", "merchant_id": "demo-merchant", "expected_route": "uc1_docs", "expected_escalated": false}
+{"id": "dup_001", "category": "uc1_happy", "query": "q2", "merchant_id": "demo-merchant", "expected_route": "uc1_docs", "expected_escalated": false}

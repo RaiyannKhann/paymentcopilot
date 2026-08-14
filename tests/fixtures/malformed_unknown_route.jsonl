@@ -1,0 +1,1 @@
+{"id": "bad_route_001", "category": "uc1_happy", "query": "q1", "merchant_id": "demo-merchant", "expected_route": "totally_made_up_route", "expected_escalated": false}
