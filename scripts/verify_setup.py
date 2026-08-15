@@ -18,7 +18,7 @@ def check_anthropic() -> bool:
         )
         print(f"[OK] Anthropic API reachable (model={settings.anthropic_model}).")
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - top-level diagnostic, any failure is reportable
         print(f"[FAIL] Anthropic API check failed: {e}")
         return False
 
@@ -37,7 +37,7 @@ def check_pinecone() -> bool:
                 f"yet — it will be created on first `ingest` run."
             )
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - top-level diagnostic, any failure is reportable
         print(f"[FAIL] Pinecone check failed: {e}")
         return False
 

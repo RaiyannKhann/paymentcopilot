@@ -4,6 +4,8 @@ Payments Support Copilot — a multi-tenant, production-styled RAG gateway that 
 
 This repo is being built in phases (see `prd.md` §11). **Phases 1-5 complete:** bare RAG pipeline (UC1 docs, UC2 structured transaction lookup, UC3 policy-grounded refusal), dispatched by a deterministic LangGraph router; input/output guardrails (prompt-injection detection, PII redaction, LLM-as-judge faithfulness, confidence-gated escalation); an offline evaluation harness (golden dataset, RAGAS metrics, custom refusal-correctness scoring); and a FastAPI gateway with Redis-backed semantic caching, per-tenant rate limiting, session memory, and a Docker Compose local stack. No CI/CD or cloud deployment yet — see `docs/01-architecture.md` for details on each phase.
 
+**Phase 7 (frontend):** a Next.js frontend (`frontend/`) implementing the three experiences in `frontendspec.md` — a Support Console, a Request Trace viewer, and a curated Attack Lab — backed by additive FastAPI endpoints (`GET /trace/{request_id}`, `GET /attack-lab/cases`, `POST /attack-lab/run`) and a per-request trace object attached to `POST /query`. See `frontend/README.md` for local dev and deploy notes.
+
 All documentation, transaction, and policy data in this repo is original and/or synthetic, generated for portfolio/demo purposes. No real merchant, transaction, or PII data is used anywhere.
 
 ## Setup

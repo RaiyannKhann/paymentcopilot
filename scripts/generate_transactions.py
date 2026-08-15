@@ -26,8 +26,8 @@ ERROR_CODES = [
     "issuer_unavailable",
     "risk_blocked",
 ]
-WINDOW_START = datetime(2026, 7, 1)
-WINDOW_END = datetime(2026, 8, 13)
+WINDOW_START = datetime(2026, 7, 1)  # noqa: DTZ001 - naive, matches the Postgres TIMESTAMP column
+WINDOW_END = datetime(2026, 8, 13)  # noqa: DTZ001
 
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "data" / "transactions" / "transactions.csv"
 

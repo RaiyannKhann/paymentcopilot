@@ -1,0 +1,78 @@
+replicaCount: 1
+
+image:
+  repository: us-central1-docker.pkg.dev/your-gcp-project-id/paymentcopilot/paymentcopilot
+  tag: latest
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+# Liveness/readiness both hit the same GET /health used by the Dockerfile's
+# own HEALTHCHECK and Cloud Run — checks Redis PING + Postgres SELECT 1.
+probes:
+  path: /health
+  initialDelaySeconds: 15
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  annotations: {}
+
+# Non-secret config, same vocabulary as .env.example — rendered into a
+# ConfigMap and consumed via envFrom.
+config:
+  ANTHROPIC_MODEL: claude-haiku-4-5
+  PINECONE_INDEX_NAME: payment-copilot-docs
+  PINECONE_CLOUD: aws
+  PINECONE_REGION: us-east-1
+  EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+  UC3_CONFIDENCE_THRESHOLD: "0.45"
+  UC1_CONFIDENCE_THRESHOLD: "0.40"
+  SEMANTIC_CACHE_SIMILARITY_THRESHOLD: "0.94"
+  SEMANTIC_CACHE_TTL_SECONDS: "3600"
+  SEMANTIC_CACHE_MAX_ENTRIES_PER_TENANT: "50"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+  RATE_LIMIT_MAX_REQUESTS: "20"
+  SESSION_TTL_SECONDS: "1800"
+  ENABLE_EVALS_ENDPOINT: "false"
+
+# Secret values (ANTHROPIC_API_KEY, PINECONE_API_KEY, DATABASE_URL,
+# REDIS_URL — the same external Neon/Upstash-shaped connection strings
+# Cloud Run uses, no bundled Postgres/Redis subcharts). Either let the
+# chart create a Secret from `secret.values` (fine for local
+# lint/template validation, NOT for a real cluster — plaintext in
+# values/history), or set `secret.existingSecretName` to a Secret you
+# created out-of-band (e.g. via `kubectl create secret` or an external
+# secrets operator) and leave `secret.values` empty.
+secret:
+  existingSecretName: ""
+  values:
+    ANTHROPIC_API_KEY: ""
+    PINECONE_API_KEY: ""
+    DATABASE_URL: ""
+    REDIS_URL: ""

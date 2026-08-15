@@ -1,0 +1,14 @@
+Payment Copilot ({{ .Chart.AppVersion }}) deployed as "{{ include "paymentcopilot.fullname" . }}".
+
+Check status:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Port-forward to the service:
+  kubectl port-forward svc/{{ include "paymentcopilot.fullname" . }} 8000:{{ .Values.service.port }}
+  curl http://localhost:8000/health
+
+{{- if not .Values.ingress.enabled }}
+
+Ingress is disabled (values.ingress.enabled=false) — use port-forward above,
+or set ingress.enabled=true with a host once a cluster/DNS is available.
+{{- end }}

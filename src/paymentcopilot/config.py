@@ -30,6 +30,8 @@ class Settings:
     rate_limit_max_requests: int
     session_ttl_seconds: int
     enable_evals_endpoint: bool
+    cors_allow_origins: list[str]
+    trace_ttl_seconds: int
 
 
 def _require(name: str) -> str:
@@ -72,6 +74,12 @@ def load_settings() -> Settings:
         rate_limit_max_requests=int(os.environ.get("RATE_LIMIT_MAX_REQUESTS", "20")),
         session_ttl_seconds=int(os.environ.get("SESSION_TTL_SECONDS", "1800")),
         enable_evals_endpoint=os.environ.get("ENABLE_EVALS_ENDPOINT", "false").lower() == "true",
+        cors_allow_origins=[
+            origin.strip()
+            for origin in os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",")
+            if origin.strip()
+        ],
+        trace_ttl_seconds=int(os.environ.get("TRACE_TTL_SECONDS", "900")),
     )
 
 
