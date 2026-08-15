@@ -23,6 +23,7 @@ from paymentcopilot.generation.prompts import build_transaction_record_text
 from paymentcopilot.graph.classify import TXN_ID_RE, classify_query
 from paymentcopilot.guardrails.faithfulness import check_faithfulness
 from paymentcopilot.guardrails.injection import scan_injection
+from paymentcopilot.guardrails.injection_ml import scan_injection_ml
 from paymentcopilot.guardrails.logging import log_guardrail_event
 from paymentcopilot.guardrails.messages import (
     FAITHFULNESS_FAILURE_MESSAGE,
@@ -71,13 +72,30 @@ def _classify_node(state: RouterState) -> dict:
     return {"route": route, "route_reason": reason}
 
 
+def _check_injection(text: str) -> str | None:
+    """Category label if `text` is flagged by the regex heuristics or the ML fallback
+    scanner, else None. Regex runs first (cheap, catches known phrasings); the ML scanner
+    (paraphrase-resistant, costs a model inference) only runs when regex passes — see
+    guardrails/injection_ml.py.
+    """
+    regex_result = scan_injection(text)
+    if regex_result.matched:
+        return regex_result.category
+
+    ml_result = scan_injection_ml(text)
+    if ml_result.matched:
+        return f"ml_prompt_injection_{ml_result.risk_score:.2f}"
+
+    return None
+
+
 def _input_guardrail_node(state: RouterState) -> dict:
     query = state["query"]
 
-    injection = scan_injection(query)
-    if injection.matched:
-        log_guardrail_event("input_blocked", state.get("route", "unknown"), f"injection:{injection.category}")
-        return {"route": "blocked", "guardrail_status": f"input_blocked:injection:{injection.category}"}
+    injection_category = _check_injection(query)
+    if injection_category:
+        log_guardrail_event("input_blocked", state.get("route", "unknown"), f"injection:{injection_category}")
+        return {"route": "blocked", "guardrail_status": f"input_blocked:injection:{injection_category}"}
 
     pii = scan_and_redact(query)
     if pii.had_pii:
@@ -134,10 +152,10 @@ def _uc2_node(state: RouterState) -> dict:
     error_explanation = explain_error_code(transaction.error_code)
     description = transaction.description or ""
 
-    injection = scan_injection(description) if description else None
-    if injection and injection.matched:
+    injection_category = _check_injection(description) if description else None
+    if injection_category:
         log_guardrail_event(
-            "input_blocked", "uc2_transaction", f"description_injection:{injection.category}"
+            "input_blocked", "uc2_transaction", f"description_injection:{injection_category}"
         )
         return {
             "answer": _format_transaction_fallback(transaction, error_explanation),
