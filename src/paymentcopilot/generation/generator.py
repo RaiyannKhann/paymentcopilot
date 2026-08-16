@@ -42,6 +42,7 @@ def generate_answer(
     query: str,
     chunks: list[RetrievedChunk],
     confidence_threshold: float | None = None,
+    history: list[dict] | None = None,
 ) -> Answer:
     """UC1 docs Q&A: grounded answer, or an explicit low-info admission (not a hard escalation)."""
     if not chunks:
@@ -57,7 +58,7 @@ def generate_answer(
     if not passes_confidence(chunks, threshold):
         return Answer(text=LOW_CONFIDENCE_MESSAGE, retrieved_chunks=chunks, grounded=False)
 
-    user_prompt = build_user_prompt(query, chunks)
+    user_prompt = build_user_prompt(query, chunks, history=history)
     text = call_claude(SYSTEM_PROMPT, user_prompt)
     grounded = _NO_INFO_MARKER not in text
 
@@ -68,6 +69,7 @@ def generate_policy_answer(
     query: str,
     chunks: list[RetrievedChunk],
     confidence_threshold: float | None = None,
+    history: list[dict] | None = None,
 ) -> Answer:
     """UC3 policy Q&A: confidence-gated, hard-escalates instead of guessing.
 
@@ -82,7 +84,7 @@ def generate_policy_answer(
     if not passes_confidence(chunks, threshold):
         return Answer(text=ESCALATION_MESSAGE, retrieved_chunks=chunks, grounded=False)
 
-    user_prompt = build_user_prompt(query, chunks)
+    user_prompt = build_user_prompt(query, chunks, history=history)
     text = call_claude(POLICY_SYSTEM_PROMPT, user_prompt)
 
     if ESCALATION_SENTINEL in text:
@@ -96,8 +98,11 @@ def generate_transaction_answer(
     transaction: Transaction,
     error_explanation: str | None,
     doc_chunks: list[RetrievedChunk],
+    history: list[dict] | None = None,
 ) -> Answer:
     """UC2 structured lookup: explain a transaction record in plain language."""
-    user_prompt = build_transaction_user_prompt(query, transaction, error_explanation, doc_chunks)
+    user_prompt = build_transaction_user_prompt(
+        query, transaction, error_explanation, doc_chunks, history=history
+    )
     text = call_claude(TRANSACTION_SYSTEM_PROMPT, user_prompt)
     return Answer(text=text, retrieved_chunks=doc_chunks, grounded=True)

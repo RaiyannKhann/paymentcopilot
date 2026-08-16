@@ -1,9 +1,11 @@
 """Short-term session memory (FR22): stores each turn with a TTL.
 
-Storage/plumbing only for now - history is persisted per session_id but not fed
-into generation this phase. Turns are sourced from the post-guardrail RouterResult
-(redacted query, already-checked answer), so no raw/unredacted text is ever
-persisted here.
+api/app.py fetches the last MAX_HISTORY_TURNS turns per session_id and threads them
+into graph/router.py's RouterState -> generation/generator.py as prior-conversation
+context (used only to resolve references like "it"; answers must still ground
+strictly in the current turn's retrieved context/transaction record). Turns are
+sourced from the post-guardrail RouterResult (redacted query, already-checked
+answer), so no raw/unredacted text is ever persisted or replayed into a prompt here.
 """
 
 import json

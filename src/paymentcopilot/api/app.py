@@ -39,7 +39,7 @@ from paymentcopilot.api.schemas import (
 )
 from paymentcopilot.cache.rate_limiter import check_and_increment
 from paymentcopilot.cache.semantic_cache import get_cached_answer, store_answer
-from paymentcopilot.cache.session_memory import append_turn
+from paymentcopilot.cache.session_memory import append_turn, get_session_history
 from paymentcopilot.cache.trace_store import get_trace, store_trace
 from paymentcopilot.config import settings
 from paymentcopilot.evals.golden_set import load_golden_set
@@ -49,6 +49,8 @@ from paymentcopilot.generation.usage_tracking import get_usage_totals, reset_usa
 from paymentcopilot.graph.router import run_query
 from paymentcopilot.models import RouterResult
 from paymentcopilot.structured.db import get_connection
+
+MAX_HISTORY_TURNS = 5
 
 app = FastAPI(title="Payment Copilot")
 app.add_middleware(RequestLoggingMiddleware)
@@ -218,12 +220,14 @@ def _build_cache_hit_trace(request_id: str, cached: dict, latency_ms: float) -> 
     )
 
 
-def run_query_with_usage(query: str, merchant_id: str) -> tuple[RouterResult, dict]:
+def run_query_with_usage(
+    query: str, merchant_id: str, history: list[dict] | None = None
+) -> tuple[RouterResult, dict]:
     """Runs entirely inside one asyncio.to_thread call: ContextVar state set by
     reset_usage_tracking() doesn't propagate back out of a thread, so reset/call/read
     must all happen in the same thread."""
     reset_usage_tracking()
-    result = run_query(query, merchant_id=merchant_id)
+    result = run_query(query, merchant_id=merchant_id, history=history)
     return result, get_usage_totals()
 
 
@@ -246,13 +250,27 @@ async def query(
         request.state.pc_guardrail_status = cached["guardrail_status"]
         request.state.pc_escalated = cached["escalated"]
         request.state.pc_token_usage = None
+        await append_turn(
+            payload.tenant_id,
+            session_id,
+            {
+                "query": payload.query,
+                "route": cached["source_route"],
+                "answer": cached["answer"],
+                "escalated": cached["escalated"],
+                "guardrail_status": cached["guardrail_status"],
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+            redis_client,
+        )
         latency_ms = (time.monotonic() - start) * 1000
         trace = _build_cache_hit_trace(request_id, cached, latency_ms)
         await store_trace(request_id, trace.model_dump(), redis_client)
         return QueryResponse(**cached, session_id=session_id, request_id=request_id, trace=trace)
 
+    history = await get_session_history(payload.tenant_id, session_id, redis_client)
     result, usage = await asyncio.to_thread(
-        run_query_with_usage, payload.query, payload.tenant_id
+        run_query_with_usage, payload.query, payload.tenant_id, history[-MAX_HISTORY_TURNS:]
     )
 
     await append_turn(

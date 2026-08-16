@@ -59,6 +59,7 @@ class RouterState(TypedDict, total=False):
     retrieved_chunks: list
     transaction: object
     guardrail_status: str
+    session_history: list[dict]
 
 
 def _append_status(current: str, tag: str) -> str:
@@ -113,7 +114,7 @@ def _blocked_node(state: RouterState) -> dict:
 
 def _uc1_node(state: RouterState) -> dict:
     chunks = retrieve(state["query"], top_k=5, doc_type="docs")
-    answer = generate_answer(state["query"], chunks)
+    answer = generate_answer(state["query"], chunks, history=state.get("session_history"))
     return {
         "answer": answer.text,
         "escalated": not answer.grounded,
@@ -184,7 +185,13 @@ def _uc2_node(state: RouterState) -> dict:
     if transaction.error_code:
         doc_chunks = retrieve(f"explain error code {transaction.error_code}", top_k=2, doc_type="docs")
 
-    answer = generate_transaction_answer(state["query"], safe_transaction, error_explanation, doc_chunks)
+    answer = generate_transaction_answer(
+        state["query"],
+        safe_transaction,
+        error_explanation,
+        doc_chunks,
+        history=state.get("session_history"),
+    )
     return {
         "answer": answer.text,
         "escalated": False,
@@ -196,7 +203,7 @@ def _uc2_node(state: RouterState) -> dict:
 
 def _uc3_node(state: RouterState) -> dict:
     chunks = retrieve(state["query"], top_k=5, doc_type="policy")
-    answer = generate_policy_answer(state["query"], chunks)
+    answer = generate_policy_answer(state["query"], chunks, history=state.get("session_history"))
     return {
         "answer": answer.text,
         "escalated": not answer.grounded,
@@ -295,8 +302,13 @@ def _build_graph():
 _graph = _build_graph()
 
 
-def run_query(query: str, merchant_id: str = "demo-merchant") -> RouterResult:
-    result = _graph.invoke({"query": query, "merchant_id": merchant_id})
+def run_query(
+    query: str, merchant_id: str = "demo-merchant", history: list[dict] | None = None
+) -> RouterResult:
+    initial_state = {"query": query, "merchant_id": merchant_id}
+    if history:
+        initial_state["session_history"] = history
+    result = _graph.invoke(initial_state)
     return RouterResult(
         query=result.get("query", query),
         route=result["route"],

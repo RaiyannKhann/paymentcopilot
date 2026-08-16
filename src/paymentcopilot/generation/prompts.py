@@ -34,7 +34,18 @@ apologies around it.
 Escalating is always the safe default when in doubt."""
 
 
-def build_user_prompt(query: str, chunks: list[RetrievedChunk]) -> str:
+def format_history(history: list[dict] | None) -> str:
+    """Prior turns (already guardrail-checked query + answer pairs, see cache/session_memory.py)
+    formatted for inclusion in a prompt, oldest first. Empty string if no history."""
+    if not history:
+        return ""
+    turns = [f"Merchant: {turn['query']}\nAssistant: {turn['answer']}" for turn in history]
+    return "\n\n".join(turns)
+
+
+def build_user_prompt(
+    query: str, chunks: list[RetrievedChunk], history: list[dict] | None = None
+) -> str:
     context_blocks = []
     for rc in chunks:
         c = rc.chunk
@@ -43,7 +54,16 @@ def build_user_prompt(query: str, chunks: list[RetrievedChunk]) -> str:
         )
     context = "\n\n---\n\n".join(context_blocks)
 
-    return f"""Context:
+    history_section = ""
+    formatted_history = format_history(history)
+    if formatted_history:
+        history_section = (
+            "Prior conversation (for resolving references like \"it\" or \"that transaction\" "
+            f"only — answer strictly from the Context below, not from prior answers):\n"
+            f"{formatted_history}\n\n"
+        )
+
+    return f"""{history_section}Context:
 {context}
 
 Question: {query}"""
@@ -86,9 +106,20 @@ def build_transaction_user_prompt(
     transaction,
     error_explanation: str | None,
     doc_chunks: list[RetrievedChunk],
+    history: list[dict] | None = None,
 ) -> str:
     record = build_transaction_record_text(transaction)
-    sections = [f"Transaction record:\n{record}"]
+    sections = []
+
+    formatted_history = format_history(history)
+    if formatted_history:
+        sections.append(
+            "Prior conversation (for resolving references like \"it\" or \"that transaction\" "
+            f"only — answer strictly from the transaction record below, not from prior answers):\n"
+            f"{formatted_history}"
+        )
+
+    sections.append(f"Transaction record:\n{record}")
 
     if error_explanation:
         sections.append(f"Error code explanation:\n{error_explanation}")

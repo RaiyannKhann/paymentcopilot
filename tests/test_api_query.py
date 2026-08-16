@@ -59,7 +59,7 @@ def test_query_translates_tenant_id_to_merchant_id(client):
     assert body["grounding_refs"] == ["02-webhook-signatures.md — Verification"]
     assert body["session_id"]
     mock_run_query.assert_called_once_with(
-        "How do I verify a webhook signature?", merchant_id="demo-merchant"
+        "How do I verify a webhook signature?", merchant_id="demo-merchant", history=[]
     )
     assert body["request_id"].startswith("req_")
     trace = body["trace"]
@@ -221,6 +221,66 @@ def test_query_cache_hit_skips_run_query(client, fake_redis):
     assert body["trace"]["cache_hit"] is True
     assert body["trace"]["retrieval"] is None
     mock_run_query.assert_not_called()
+
+
+def test_query_passes_prior_turn_history_to_run_query(client):
+    with patch("paymentcopilot.api.app.run_query", return_value=_ROUTER_RESULT) as mock_run_query:
+        first_response = client.post(
+            "/query",
+            json={"tenant_id": "demo-merchant", "query": "How do I verify a webhook signature?"},
+        )
+        session_id = first_response.json()["session_id"]
+
+        client.post(
+            "/query",
+            json={
+                "tenant_id": "demo-merchant",
+                "query": "What about for refunds?",
+                "session_id": session_id,
+            },
+        )
+
+    first_call, second_call = mock_run_query.call_args_list
+    assert first_call.kwargs["history"] == []
+    second_history = second_call.kwargs["history"]
+    assert len(second_history) == 1
+    assert second_history[0]["query"] == "How do I verify a webhook signature?"
+    assert second_history[0]["answer"] == _ROUTER_RESULT.answer
+
+
+def test_query_cache_hit_still_appends_to_session_history(client, fake_redis):
+    import asyncio
+
+    from paymentcopilot.cache.session_memory import get_session_history
+
+    cached_response = {
+        "answer": "Cached: verify via HMAC-SHA256.",
+        "source_route": "uc1_docs",
+        "grounding_refs": ["02-webhook-signatures.md — Verification"],
+        "guardrail_status": "passed",
+        "escalated": False,
+    }
+    asyncio.run(
+        store_answer(
+            "demo-merchant",
+            "How do I verify a webhook signature?",
+            cached_response,
+            False,
+            fake_redis,
+        )
+    )
+
+    with patch("paymentcopilot.api.app.run_query") as mock_run_query:
+        response = client.post(
+            "/query",
+            json={"tenant_id": "demo-merchant", "query": "How do I verify a webhook signature?"},
+        )
+
+    mock_run_query.assert_not_called()
+    session_id = response.json()["session_id"]
+    history = asyncio.run(get_session_history("demo-merchant", session_id, fake_redis))
+    assert len(history) == 1
+    assert history[0]["answer"] == cached_response["answer"]
 
 
 def test_health_returns_200_when_dependencies_reachable(client):
