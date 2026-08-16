@@ -7,6 +7,7 @@ import type { AttackCase, AttackRunResult } from "@/lib/types";
 import { AttackCaseGrid } from "@/components/AttackCaseGrid";
 import { AttackResultPanel } from "@/components/AttackResultPanel";
 import { PageHeader } from "@/components/PageHeader";
+import { VoxelBackdrop } from "@/components/VoxelBackdrop";
 
 export default function AttackLabPage() {
   const [cases, setCases] = useState<AttackCase[]>([]);
@@ -53,7 +54,8 @@ export default function AttackLabPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10 pb-20 sm:px-6">
+    <div className="relative mx-auto w-full max-w-3xl px-4 py-10 pb-20 sm:px-6">
+      <VoxelBackdrop />
       <PageHeader
         eyebrow="Security"
         title="Guardrail Attack Lab"

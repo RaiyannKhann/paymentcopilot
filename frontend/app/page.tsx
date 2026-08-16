@@ -9,6 +9,7 @@ import { ResponseCard } from "@/components/ResponseCard";
 import { PromptComposer } from "@/components/PromptComposer";
 import { CapabilityCards } from "@/components/CapabilityCards";
 import { Orb } from "@/components/Orb";
+import { VoxelBackdrop } from "@/components/VoxelBackdrop";
 
 const TENANT_ID = process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "demo-merchant";
 
@@ -49,7 +50,9 @@ export default function SupportConsolePage() {
   const isLanding = !response && !error && !loading;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-20 sm:px-6">
+    <div className="relative mx-auto w-full max-w-3xl px-4 pb-20 sm:px-6">
+      <VoxelBackdrop />
+
       {isLanding ? (
         <section className="flex flex-col items-center pt-14 text-center sm:pt-20">
           <Orb size={104} />

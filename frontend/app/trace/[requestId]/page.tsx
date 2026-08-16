@@ -10,6 +10,7 @@ import { ROUTE_META, formatLatency, routeLabel } from "@/lib/format";
 import type { TraceResponse } from "@/lib/types";
 import { PipelineTrace } from "@/components/PipelineTrace";
 import { StatTile } from "@/components/PageHeader";
+import { VoxelBackdrop } from "@/components/VoxelBackdrop";
 
 export default function TraceDetailPage() {
   const params = useParams<{ requestId: string }>();
@@ -62,7 +63,8 @@ export default function TraceDetailPage() {
     trace.guardrails.pii_output !== "redacted";
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10 pb-20 sm:px-6">
+    <div className="relative mx-auto w-full max-w-3xl px-4 py-10 pb-20 sm:px-6">
+      <VoxelBackdrop />
       <Link
         href="/"
         className="inline-flex items-center gap-1.5 text-xs text-ink-faint transition-colors hover:text-ink"

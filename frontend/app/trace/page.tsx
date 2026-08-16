@@ -8,6 +8,7 @@ import { formatLatency, routeCode, routeLabel } from "@/lib/format";
 import type { TraceResponse } from "@/lib/types";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { VoxelBackdrop } from "@/components/VoxelBackdrop";
 
 export default function TraceIndexPage() {
   const [traces, setTraces] = useState<TraceResponse[]>([]);
@@ -20,7 +21,8 @@ export default function TraceIndexPage() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10 pb-20 sm:px-6">
+    <div className="relative mx-auto w-full max-w-3xl px-4 py-10 pb-20 sm:px-6">
+      <VoxelBackdrop />
       <PageHeader
         eyebrow="Observability"
         title="Request Trace"
