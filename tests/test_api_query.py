@@ -248,6 +248,49 @@ def test_query_passes_prior_turn_history_to_run_query(client):
     assert second_history[0]["answer"] == _ROUTER_RESULT.answer
 
 
+def test_follow_up_query_is_never_served_from_the_tenant_wide_cache(client, fake_redis):
+    """A follow-up only resolves against its own session, so a same-text entry cached by
+    a different conversation must not short-circuit it."""
+    import asyncio
+
+    asyncio.run(
+        store_answer(
+            "demo-merchant",
+            "Why did that fail?",
+            {
+                "answer": "Another session's answer.",
+                "source_route": "uc2_transaction",
+                "grounding_refs": [],
+                "guardrail_status": "passed",
+                "escalated": False,
+            },
+            False,
+            fake_redis,
+        )
+    )
+
+    with patch("paymentcopilot.api.app.run_query", return_value=_ROUTER_RESULT) as mock_run_query:
+        response = client.post(
+            "/query",
+            json={"tenant_id": "demo-merchant", "query": "Why did that fail?"},
+        )
+
+    assert response.json()["trace"]["cache_hit"] is False
+    assert response.json()["answer"] == _ROUTER_RESULT.answer
+    mock_run_query.assert_called_once()
+
+
+def test_follow_up_query_answer_is_not_cached_for_other_sessions(client, fake_redis):
+    import asyncio
+
+    from paymentcopilot.cache.semantic_cache import get_cached_answer
+
+    with patch("paymentcopilot.api.app.run_query", return_value=_ROUTER_RESULT):
+        client.post("/query", json={"tenant_id": "demo-merchant", "query": "Can I refund it?"})
+
+    assert asyncio.run(get_cached_answer("demo-merchant", "Can I refund it?", fake_redis)) is None
+
+
 def test_query_cache_hit_still_appends_to_session_history(client, fake_redis):
     import asyncio
 

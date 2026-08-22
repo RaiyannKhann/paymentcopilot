@@ -38,7 +38,11 @@ from paymentcopilot.api.schemas import (
     TraceTransaction,
 )
 from paymentcopilot.cache.rate_limiter import check_and_increment
-from paymentcopilot.cache.semantic_cache import get_cached_answer, store_answer
+from paymentcopilot.cache.semantic_cache import (
+    get_cached_answer,
+    is_context_dependent,
+    store_answer,
+)
 from paymentcopilot.cache.session_memory import append_turn, get_session_history
 from paymentcopilot.cache.trace_store import get_trace, store_trace
 from paymentcopilot.config import settings
@@ -243,7 +247,17 @@ async def query(
     request_id = f"req_{uuid.uuid4().hex[:8]}"
     request.state.pc_tenant_id = payload.tenant_id
 
-    cached = await get_cached_answer(payload.tenant_id, payload.query, redis_client)
+    # FR20 (semantic cache) is tenant-wide; FR22 (session memory) is per-session. A
+    # follow-up like "why did that fail?" belongs only to its own conversation, so it
+    # skips the cache in both directions - a hit there would answer this session with a
+    # different session's turn, and storing it would poison every other session's.
+    context_dependent = is_context_dependent(payload.query)
+
+    cached = (
+        None
+        if context_dependent
+        else await get_cached_answer(payload.tenant_id, payload.query, redis_client)
+    )
     if cached is not None:
         request.state.pc_cache_hit = True
         request.state.pc_route = cached["source_route"]
@@ -294,9 +308,10 @@ async def query(
         "guardrail_status": result.guardrail_status,
         "escalated": result.escalated,
     }
-    await store_answer(
-        payload.tenant_id, payload.query, response_payload, result.escalated, redis_client
-    )
+    if not context_dependent:
+        await store_answer(
+            payload.tenant_id, payload.query, response_payload, result.escalated, redis_client
+        )
 
     request.state.pc_cache_hit = False
     request.state.pc_route = result.route

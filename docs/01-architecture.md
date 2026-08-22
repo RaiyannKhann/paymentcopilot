@@ -240,6 +240,8 @@ write. Storage/plumbing only this phase — history is never fed back into gener
 matching the PRD's explicit non-goal of building a general-purpose chatbot. If the
 client omits `session_id`, the API generates one and returns it in the response so a
 future phase that does consume history has a client-visible handle to build on.
+(Superseded: history *is* now threaded into generation, and the console renders the
+conversation it comes from — see the decisions log's conversational-memory entry.)
 
 **FastAPI layer (FR23/FR24), `api/app.py`:** `tenant_id` (the API's public vocabulary,
 matching `prd.md` §10) is translated to `merchant_id` (the router's internal

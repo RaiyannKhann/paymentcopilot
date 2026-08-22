@@ -1,7 +1,11 @@
 import asyncio
 import time
 
-from paymentcopilot.cache.semantic_cache import get_cached_answer, store_answer
+from paymentcopilot.cache.semantic_cache import (
+    get_cached_answer,
+    is_context_dependent,
+    store_answer,
+)
 
 _RESPONSE = {
     "answer": "Webhook signatures are verified using HMAC-SHA256.",
@@ -82,3 +86,11 @@ def test_lazy_ttl_expiry_skips_stale_entries(fake_redis):
         return await get_cached_answer("demo-merchant", "How do I verify a webhook signature?", fake_redis)
 
     assert asyncio.run(run()) is None
+
+
+def test_follow_up_queries_are_flagged_context_dependent():
+    assert is_context_dependent("Why did that fail?")
+    assert is_context_dependent("Can I refund it?")
+    assert is_context_dependent("What about the second one?")
+    assert not is_context_dependent("How do I verify a webhook signature?")
+    assert not is_context_dependent("Why did txn_88213 fail?")

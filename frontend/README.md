@@ -2,7 +2,7 @@
 
 Next.js frontend for Payment Copilot (`frontendspec.md`), Phase 7. Three experiences:
 
-- **Support Console** (`/`) — ask UC1/UC2/UC3 questions, see the grounded answer, route, sources, and guardrail status.
+- **Support Console** (`/`) — a multi-turn conversation: ask UC1/UC2/UC3 questions, see the grounded answer, route, sources, and guardrail status for each turn. Follow-ups are answered against the backend's per-session memory (the last 5 turns), and "New conversation" starts a fresh `session_id`.
 - **Request Trace** (`/trace/[requestId]`) — the pipeline the backend actually ran for a given request: rate limit, semantic cache, router, input guardrails, retrieval/lookup, generation, output guardrails.
 - **Attack Lab** (`/attack-lab`) — curated, server-side attack cases run through the real guardrail functions. Never reaches Claude.
 
