@@ -8,6 +8,7 @@ merchant_id, so a lookup can never scan another tenant's entries.
 """
 
 import json
+import re
 import time
 
 import numpy as np
@@ -17,6 +18,28 @@ from paymentcopilot.config import settings
 from paymentcopilot.embeddings.embedder import embed_one
 
 _KEY_PREFIX = "semcache"
+
+# A follow-up like "why did that fail?" or "can I refund it?" means nothing outside the
+# session it was asked in, but this cache is keyed on query text per tenant - so one
+# session's follow-up would happily match another's. Such queries bypass the cache in
+# both directions (see api/app.py). The cost is a missed hit on the rare standalone
+# query that happens to use one of these words, which just falls through to the full
+# pipeline; the alternative is answering a follow-up with someone else's conversation.
+_CONTEXT_DEPENDENT_RE = re.compile(
+    r"\b(it|its|it's|that|this|these|those|they|them|their"
+    r"|the same|the other|the (?:first|second|third|last|previous)"
+    r"|there|then|instead)\b",
+    re.IGNORECASE,
+)
+
+
+def is_context_dependent(query: str) -> bool:
+    """True when the query only resolves against prior turns (FR22 session memory).
+
+    Deliberately over-inclusive: a false positive costs a cache hit, a false negative
+    serves a cross-session answer.
+    """
+    return bool(_CONTEXT_DEPENDENT_RE.search(query))
 
 
 def _key(merchant_id: str) -> str:
